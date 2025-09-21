@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebFetch(domain:developers.dropbox.com)",
+      "WebFetch(domain:dropbox-sdk-python.readthedocs.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(del test_oauth.py test_sync_oauth.py test_config.json)"
     ],
     "deny": [],
     "ask": []

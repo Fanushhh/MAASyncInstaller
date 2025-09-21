@@ -11,6 +11,7 @@ import platform
 import subprocess
 import threading
 import webbrowser
+import shutil
 from pathlib import Path
 from tkinter import *
 from tkinter import ttk, messagebox, filedialog
@@ -31,11 +32,15 @@ class MAAReduxSyncInstaller:
             pass
         
         # Variables
-        self.dropbox_token = StringVar()
+        self.dropbox_app_key = StringVar()
+        self.dropbox_app_secret = StringVar()
         self.save_file_path = StringVar()
         self.app_name = StringVar(value="MAA Redux")
         self.install_location = StringVar()
         self.auto_start = BooleanVar(value=True)
+
+        # OAuth status
+        self.oauth_authorized = BooleanVar(value=False)
         
         # System detection
         self.system = platform.system()
@@ -136,43 +141,65 @@ class MAAReduxSyncInstaller:
     
     def create_config_widgets(self, parent):
         """Create configuration input widgets"""
-        
-        # Dropbox Token
-        ttk.Label(parent, text="Dropbox Token:", font=("Arial", 10, "bold")).grid(
+
+        # Dropbox OAuth Configuration
+        ttk.Label(parent, text="Dropbox OAuth Settings:", font=("Arial", 10, "bold")).grid(
             row=0, column=0, sticky=W, pady=(0, 5))
-        
-        token_frame = ttk.Frame(parent)
-        token_frame.grid(row=1, column=0, columnspan=2, sticky=EW, pady=(0, 15))
-        
-        token_entry = ttk.Entry(token_frame, textvariable=self.dropbox_token,
-                               width=50, show="*")
-        token_entry.pack(side=LEFT, fill=X, expand=True, padx=(0, 10))
-        
-        ttk.Button(token_frame, text="Get Token", 
+
+        # App Key
+        ttk.Label(parent, text="App Key:").grid(row=1, column=0, sticky=W, pady=(0, 2))
+        app_key_frame = ttk.Frame(parent)
+        app_key_frame.grid(row=2, column=0, columnspan=2, sticky=EW, pady=(0, 10))
+
+        app_key_entry = ttk.Entry(app_key_frame, textvariable=self.dropbox_app_key, width=40)
+        app_key_entry.pack(side=LEFT, fill=X, expand=True, padx=(0, 10))
+
+        # App Secret
+        ttk.Label(parent, text="App Secret:").grid(row=3, column=0, sticky=W, pady=(0, 2))
+        app_secret_frame = ttk.Frame(parent)
+        app_secret_frame.grid(row=4, column=0, columnspan=2, sticky=EW, pady=(0, 10))
+
+        app_secret_entry = ttk.Entry(app_secret_frame, textvariable=self.dropbox_app_secret,
+                                   width=40, show="*")
+        app_secret_entry.pack(side=LEFT, fill=X, expand=True, padx=(0, 10))
+
+        # OAuth Authorization
+        oauth_frame = ttk.Frame(parent)
+        oauth_frame.grid(row=5, column=0, columnspan=2, sticky=EW, pady=(10, 15))
+
+        self.auth_status_label = ttk.Label(oauth_frame, text="Not Authorized",
+                                          font=("Arial", 9), foreground="red")
+        self.auth_status_label.pack(side=LEFT, padx=(0, 10))
+
+        ttk.Button(oauth_frame, text="Setup Dropbox App",
                   command=self.open_dropbox_setup).pack(side=RIGHT, padx=(10, 0))
+
+        self.auth_button = ttk.Button(oauth_frame, text="Authorize with Dropbox",
+                                     command=self.authorize_dropbox)
+        self.auth_button.pack(side=RIGHT, padx=(5, 0))
         
         # Save File Location
         ttk.Label(parent, text="Save File Location:", font=("Arial", 10, "bold")).grid(
-            row=2, column=0, sticky=W, pady=(0, 5))
-        
+            row=6, column=0, sticky=W, pady=(15, 5))
+
         file_frame = ttk.Frame(parent)
-        file_frame.grid(row=3, column=0, columnspan=2, sticky=EW, pady=(0, 15))
-        
+        file_frame.grid(row=7, column=0, columnspan=2, sticky=EW, pady=(0, 15))
+
         file_entry = ttk.Entry(file_frame, textvariable=self.save_file_path, width=40)
         file_entry.pack(side=LEFT, fill=X, expand=True, padx=(0, 10))
-        
-        ttk.Button(file_frame, text="Browse", 
+
+        ttk.Button(file_frame, text="Browse",
                   command=self.browse_save_file).pack(side=RIGHT, padx=(10, 0))
-        
-        ttk.Button(file_frame, text="Auto-Detect", 
+
+        ttk.Button(file_frame, text="Auto-Detect",
                   command=self.detect_save_files).pack(side=RIGHT, padx=(5, 0))
-        
+
         # App Name
         ttk.Label(parent, text="Application Name:", font=("Arial", 10, "bold")).grid(
-            row=4, column=0, sticky=W, pady=(0, 5))
-        
+            row=8, column=0, sticky=W, pady=(0, 5))
+
         ttk.Entry(parent, textvariable=self.app_name, width=30).grid(
-            row=5, column=0, sticky=W, pady=(0, 10))
+            row=9, column=0, sticky=W, pady=(0, 10))
         
         # Configure grid weights
         parent.columnconfigure(0, weight=1)
@@ -328,12 +355,12 @@ class MAAReduxSyncInstaller:
     def open_dropbox_setup(self):
         """Open Dropbox developer page and show instructions"""
         webbrowser.open("https://www.dropbox.com/developers/apps")
-        
-        instructions = """Dropbox Setup Instructions:
+
+        instructions = """Dropbox OAuth App Setup Instructions:
 
 1. Click "Create app" on the opened page
 2. Choose "Scoped access"
-3. Choose "App folder" (recommended)
+3. Choose "App folder" (recommended for security)
 4. Enter app name: "MAA-Redux-Sync"
 5. Click "Create app"
 
@@ -342,58 +369,222 @@ class MAAReduxSyncInstaller:
    ✓ files.metadata.write
    ✓ files.content.read
    ✓ files.content.write
-   
+
 7. Click "Submit"
 
-8. Go to "Settings" tab
-9. In "OAuth 2" section, click "Generate" for access token
-10. Copy the generated token and paste it here
+8. Go to "Settings" tab:
+   - Copy "App key" and paste it in the installer
+   - Copy "App secret" and paste it in the installer
 
-Note: Keep your token secure and don't share it with others!"""
-        
-        messagebox.showinfo("Dropbox Setup", instructions)
+9. ⚠️  IMPORTANT - Add Redirect URI:
+   In "OAuth 2" section, under "Redirect URIs":
+   - Add: http://localhost:8080/oauth/callback
+   - Add: http://127.0.0.1:8080/oauth/callback
+   - Click "Add" for BOTH URIs
+
+10. Make sure to click "Add" and save the redirect URIs!
+
+11. Click "Authorize with Dropbox" in the installer
+    to complete the OAuth flow
+
+Note: Both localhost and 127.0.0.1 URIs are needed for compatibility.
+This method is more secure than access tokens as it uses
+refresh tokens that can be automatically renewed!"""
+
+        messagebox.showinfo("Dropbox OAuth Setup", instructions)
+
+    def authorize_dropbox(self):
+        """Start OAuth authorization flow"""
+        app_key = self.dropbox_app_key.get().strip()
+        app_secret = self.dropbox_app_secret.get().strip()
+
+        if not app_key:
+            messagebox.showerror("Missing App Key", "Please enter your Dropbox App Key first")
+            return
+
+        if not app_secret:
+            messagebox.showerror("Missing App Secret", "Please enter your Dropbox App Secret first")
+            return
+
+        # Validate App Key format (Dropbox app keys are typically alphanumeric)
+        if len(app_key) < 10:
+            messagebox.showerror("Invalid App Key",
+                               "App Key seems too short. Please check that you copied the complete App Key from Dropbox.")
+            return
+
+        if len(app_secret) < 10:
+            messagebox.showerror("Invalid App Secret",
+                               "App Secret seems too short. Please check that you copied the complete App Secret from Dropbox.")
+            return
+
+        try:
+            from dropbox_oauth import DropboxTokenManager
+
+            # Create token manager
+            config_path = "temp_oauth_config.json"
+            token_manager = DropboxTokenManager(
+                config_path,
+                app_key,
+                app_secret
+            )
+
+            self.update_status("Starting OAuth authorization...")
+            self.auth_button.config(state=DISABLED)
+
+            # Start authorization in thread to avoid blocking UI
+            auth_thread = threading.Thread(target=self._perform_oauth, args=(token_manager,))
+            auth_thread.daemon = True
+            auth_thread.start()
+
+        except ImportError:
+            messagebox.showerror("Error", "OAuth module not found. Please ensure dropbox_oauth.py is available.")
+        except Exception as e:
+            messagebox.showerror("Authorization Error", f"Failed to start authorization: {str(e)}")
+            self.auth_button.config(state=NORMAL)
+
+    def _perform_oauth(self, token_manager):
+        """Perform OAuth in background thread"""
+        try:
+            # Show instruction
+            self.root.after(0, lambda: messagebox.showinfo(
+                "Browser Authorization",
+                "Your browser will open for Dropbox authorization.\n\n"
+                "1. Log in to your Dropbox account\n"
+                "2. Click 'Allow' to authorize the app\n"
+                "3. The browser tab will close automatically\n"
+                "4. Return to this installer\n\n"
+                "This may take up to 5 minutes to complete."
+            ))
+
+            # Perform authorization
+            success = token_manager.authorize_new_user()
+
+            if success:
+                self.root.after(0, self._oauth_success)
+            else:
+                self.root.after(0, self._oauth_failed, "Authorization was cancelled or failed")
+
+        except Exception as e:
+            self.root.after(0, self._oauth_failed, str(e))
+
+    def _oauth_success(self):
+        """Handle successful OAuth"""
+        self.oauth_authorized.set(True)
+        self.auth_status_label.config(text="✓ Authorized", foreground="green")
+        self.auth_button.config(text="Re-authorize", state=NORMAL)
+        self.update_status("Dropbox authorization successful!")
+        messagebox.showinfo("Success", "Dropbox authorization completed successfully!\n\n"
+                                      "You can now proceed with installation.")
+
+    def _oauth_failed(self, error_msg):
+        """Handle failed OAuth"""
+        self.oauth_authorized.set(False)
+        self.auth_status_label.config(text="❌ Failed", foreground="red")
+        self.auth_button.config(state=NORMAL)
+        self.update_status("Dropbox authorization failed")
+
+        # Check for specific error types
+        error_lower = error_msg.lower()
+
+        if "redirect_uri" in error_lower or "bad request" in error_lower or "invalid_request" in error_lower:
+            messagebox.showerror("App Configuration Error",
+                               f"❌ Configuration Error\n\n"
+                               f"There's an issue with your Dropbox app configuration.\n\n"
+                               f"🔧 Check These Settings:\n\n"
+                               f"1. App Key & Secret:\n"
+                               f"   • Make sure they're copied correctly (no extra spaces)\n"
+                               f"   • App Key should be 15+ characters\n"
+                               f"   • App Secret should be 15+ characters\n\n"
+                               f"2. Redirect URIs (in Dropbox app settings):\n"
+                               f"   • Go to Settings tab in your Dropbox app\n"
+                               f"   • Add these EXACT URIs:\n"
+                               f"     - http://localhost:8080/oauth/callback\n"
+                               f"     - http://127.0.0.1:8080/oauth/callback\n"
+                               f"   • Click 'Add' for each URI\n\n"
+                               f"3. App Type:\n"
+                               f"   • Make sure you selected 'Scoped access'\n"
+                               f"   • App folder or Full Dropbox access\n\n"
+                               f"Error: {error_msg}")
+        else:
+            messagebox.showerror("Authorization Failed",
+                               f"Dropbox authorization failed:\n\n{error_msg}\n\n"
+                               f"Please check:\n"
+                               f"• App Key and App Secret are correct\n"
+                               f"• Redirect URIs are configured:\n"
+                               f"  - http://localhost:8080/oauth/callback\n"
+                               f"  - http://127.0.0.1:8080/oauth/callback\n"
+                               f"• Internet connection is working\n"
+                               f"• No firewall blocking localhost:8080")
     
     def test_config(self):
         """Test the current configuration"""
         if not self.validate_config():
             return
-        
+
         self.update_status("Testing configuration...")
-        
+
         try:
-            # Test Dropbox connection
+            # Test OAuth tokens
+            from dropbox_oauth import DropboxTokenManager
             import dropbox
-            dbx = dropbox.Dropbox(self.dropbox_token.get())
+
+            config_path = "temp_oauth_config.json"
+            token_manager = DropboxTokenManager(
+                config_path,
+                self.dropbox_app_key.get().strip(),
+                self.dropbox_app_secret.get().strip()
+            )
+
+            # Get valid access token
+            access_token = token_manager.get_valid_access_token()
+            if not access_token:
+                raise Exception("No valid access token available. Please authorize first.")
+
+            # Test Dropbox connection
+            dbx = dropbox.Dropbox(access_token)
             account = dbx.users_get_current_account()
-            
+
             # Test save file access
             save_path = Path(self.save_file_path.get())
             if not save_path.exists():
                 raise FileNotFoundError("Save file not found")
-            
+
             # Test file permissions
             if not os.access(save_path, os.R_OK):
                 raise PermissionError("Cannot read save file")
-            
+
             self.update_status("Configuration test successful!")
-            messagebox.showinfo("Test Result", 
+            messagebox.showinfo("Test Result",
                                f"Configuration test successful!\n\n"
                                f"Dropbox: Connected as {account.name.display_name}\n"
                                f"Save file: Found ({save_path.name})\n"
-                               f"File size: {save_path.stat().st_size} bytes")
-            
-        except ImportError:
-            messagebox.showwarning("Test Incomplete", 
-                                 "Dropbox module not installed. "
-                                 "Installation will handle this automatically.")
+                               f"File size: {save_path.stat().st_size} bytes\n"
+                               f"OAuth: Using refresh tokens ✓")
+
+        except ImportError as e:
+            if "dropbox_oauth" in str(e):
+                messagebox.showerror("Test Failed",
+                                   "OAuth module not found. Please ensure dropbox_oauth.py is available.")
+            else:
+                messagebox.showwarning("Test Incomplete",
+                                     "Dropbox module not installed. "
+                                     "Installation will handle this automatically.")
         except Exception as e:
             messagebox.showerror("Test Failed", f"Configuration test failed:\n{str(e)}")
             self.update_status("Configuration test failed")
     
     def validate_config(self):
         """Validate configuration inputs"""
-        if not self.dropbox_token.get().strip():
-            messagebox.showerror("Validation Error", "Please enter your Dropbox token")
+        if not self.dropbox_app_key.get().strip():
+            messagebox.showerror("Validation Error", "Please enter your Dropbox App Key")
+            return False
+
+        if not self.dropbox_app_secret.get().strip():
+            messagebox.showerror("Validation Error", "Please enter your Dropbox App Secret")
+            return False
+
+        if not self.oauth_authorized.get():
+            messagebox.showerror("Validation Error", "Please authorize with Dropbox first")
             return False
         
         if not self.save_file_path.get().strip():
@@ -445,24 +636,28 @@ Note: Keep your token secure and don't share it with others!"""
             self.update_progress(20, "Installing Python dependencies...")
             self.install_dependencies()
             
-            # Step 3: Create main script
+            # Step 3: Copy OAuth module
+            self.update_progress(30, "Copying OAuth module...")
+            self.copy_oauth_module(install_dir)
+
+            # Step 4: Create main script
             self.update_progress(40, "Creating sync script...")
             self.create_sync_script(install_dir)
-            
-            # Step 4: Create configuration
+
+            # Step 5: Create configuration
             self.update_progress(60, "Creating configuration...")
             self.create_config_file(install_dir)
             
-            # Step 5: Create helper scripts
+            # Step 6: Create helper scripts
             self.update_progress(70, "Creating helper scripts...")
             self.create_helper_scripts(install_dir)
-            
-            # Step 6: Setup auto-start
+
+            # Step 7: Setup auto-start
             if self.auto_start.get():
                 self.update_progress(80, "Setting up auto-start...")
                 self.setup_autostart(install_dir)
-            
-            # Step 7: Test installation
+
+            # Step 8: Test installation
             self.update_progress(90, "Testing installation...")
             self.test_installation(install_dir)
             
@@ -477,12 +672,21 @@ Note: Keep your token secure and don't share it with others!"""
     def install_dependencies(self):
         """Install required Python packages"""
         packages = ["psutil", "dropbox"]
-        
+
         for package in packages:
             try:
                 __import__(package)
             except ImportError:
                 subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+    def copy_oauth_module(self, install_dir):
+        """Copy OAuth module to installation directory"""
+        oauth_module_path = Path("dropbox_oauth.py")
+        if oauth_module_path.exists():
+            target_path = install_dir / "dropbox_oauth.py"
+            shutil.copy2(oauth_module_path, target_path)
+        else:
+            raise FileNotFoundError("OAuth module (dropbox_oauth.py) not found in current directory")
     
     def create_sync_script(self, install_dir):
         """Create the main synchronization script"""
@@ -511,6 +715,13 @@ except ImportError:
     DROPBOX_AVAILABLE = False
     print("Warning: Dropbox module not available")
 
+try:
+    from dropbox_oauth import DropboxTokenManager
+    OAUTH_AVAILABLE = True
+except ImportError:
+    OAUTH_AVAILABLE = False
+    print("Warning: OAuth module not available")
+
 # Logging setup
 def setup_logging():
     logging.basicConfig(
@@ -531,38 +742,94 @@ class MAAReduxSync:
         self.init_dropbox()
         self.last_upload_time = 0
         self.upload_delay = 5  # seconds to wait after game closes
-    
+
     def load_config(self):
         """Load configuration from config.json"""
         try:
             with open('config.json', 'r', encoding='utf-8') as f:
                 config = json.load(f)
-            
+
             self.app_name = config['app_name']
             self.save_file_path = Path(config['save_file_path'])
-            self.dropbox_token = config['dropbox_token']
             self.dropbox_folder = config.get('dropbox_folder', '/SyncedFiles')
             self.sync_filename = config.get('sync_filename', 'save.dat')
-            
+
+            # OAuth credentials
+            self.app_key = config.get('dropbox_app_key', '')
+            self.app_secret = config.get('dropbox_app_secret', '')
+
+            # Legacy support for old access token method
+            self.legacy_token = config.get('dropbox_token', '')
+
             logger.info(f"Configuration loaded: {self.app_name}")
+            logger.info(f"OAuth available: {OAUTH_AVAILABLE}")
+
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
             sys.exit(1)
-    
+
     def init_dropbox(self):
-        """Initialize Dropbox connection"""
+        """Initialize Dropbox connection with OAuth support"""
         if not DROPBOX_AVAILABLE:
             logger.error("Dropbox module not available")
             self.dbx = None
+            self.token_manager = None
             return
-        
-        try:
-            self.dbx = dropbox.Dropbox(self.dropbox_token)
-            account = self.dbx.users_get_current_account()
-            logger.info(f"Connected to Dropbox as: {account.name.display_name}")
-        except Exception as e:
-            logger.error(f"Dropbox connection failed: {e}")
-            self.dbx = None
+
+        # Try OAuth first (preferred method)
+        if OAUTH_AVAILABLE and self.app_key and self.app_secret:
+            try:
+                self.token_manager = DropboxTokenManager(
+                    'config.json',
+                    self.app_key,
+                    self.app_secret
+                )
+
+                access_token = self.token_manager.get_valid_access_token()
+                if access_token:
+                    self.dbx = dropbox.Dropbox(access_token)
+                    account = self.dbx.users_get_current_account()
+                    logger.info(f"Connected to Dropbox via OAuth as: {account.name.display_name}")
+                    return
+                else:
+                    logger.warning("No valid OAuth access token available")
+
+            except Exception as e:
+                logger.error(f"OAuth connection failed: {e}")
+
+        # Fallback to legacy token method
+        if self.legacy_token:
+            try:
+                self.dbx = dropbox.Dropbox(self.legacy_token)
+                account = self.dbx.users_get_current_account()
+                logger.info(f"Connected to Dropbox via legacy token as: {account.name.display_name}")
+                logger.warning("Using legacy access token - consider upgrading to OAuth")
+                self.token_manager = None
+                return
+            except Exception as e:
+                logger.error(f"Legacy token connection failed: {e}")
+
+        # No valid connection method
+        logger.error("No valid Dropbox credentials available")
+        self.dbx = None
+        self.token_manager = None
+
+    def refresh_dropbox_connection(self):
+        """Refresh Dropbox connection if using OAuth"""
+        if self.token_manager:
+            try:
+                access_token = self.token_manager.get_valid_access_token()
+                if access_token:
+                    self.dbx = dropbox.Dropbox(access_token)
+                    logger.info("Dropbox connection refreshed")
+                    return True
+                else:
+                    logger.error("Failed to get valid access token")
+                    return False
+            except Exception as e:
+                logger.error(f"Failed to refresh connection: {e}")
+                return False
+        return True  # No refresh needed for legacy tokens
     
     def is_app_running(self):
         """Check if the target application is running"""
@@ -603,26 +870,45 @@ class MAAReduxSync:
         if not self.dbx:
             logger.warning("Dropbox not available for import")
             return False
-        
+
         try:
             remote_path = f"{self.dropbox_folder}/{self.sync_filename}"
-            
+
             # Check if file exists on Dropbox
             try:
                 metadata = self.dbx.files_get_metadata(remote_path)
                 logger.info(f"Remote file found: {metadata.client_modified}")
+            except dropbox.exceptions.AuthError:
+                logger.info("Authentication error, attempting to refresh token...")
+                if self.refresh_dropbox_connection():
+                    # Retry after refresh
+                    return self.quick_import()
+                else:
+                    logger.error("Failed to refresh token for import")
+                    return False
             except dropbox.exceptions.ApiError:
                 logger.info("No remote save file found")
                 return False
-            
+
             # Create backup before importing
             self.create_backup("pre_import")
-            
+
             # Download from Dropbox
-            self.dbx.files_download_to_file(str(self.save_file_path), remote_path)
-            logger.info("Quick import successful")
-            return True
-            
+            try:
+                self.dbx.files_download_to_file(str(self.save_file_path), remote_path)
+                logger.info("Quick import successful")
+                return True
+            except dropbox.exceptions.AuthError:
+                logger.info("Authentication error during download, attempting to refresh token...")
+                if self.refresh_dropbox_connection():
+                    # Retry after refresh
+                    self.dbx.files_download_to_file(str(self.save_file_path), remote_path)
+                    logger.info("Quick import successful after token refresh")
+                    return True
+                else:
+                    logger.error("Failed to refresh token for download")
+                    return False
+
         except Exception as e:
             logger.error(f"Import failed: {e}")
             return False
@@ -631,24 +917,43 @@ class MAAReduxSync:
         """Upload save file to Dropbox after game closes"""
         if not self.dbx or not self.save_file_path.exists():
             return False
-        
+
         try:
             # Read file data
             with open(self.save_file_path, 'rb') as f:
                 file_data = f.read()
-            
+
             # Upload to Dropbox
             remote_path = f"{self.dropbox_folder}/{self.sync_filename}"
-            self.dbx.files_upload(
-                file_data, 
-                remote_path, 
-                mode=dropbox.files.WriteMode('overwrite')
-            )
-            
-            self.last_upload_time = time.time()
-            logger.info("Upload successful")
-            return True
-            
+
+            try:
+                self.dbx.files_upload(
+                    file_data,
+                    remote_path,
+                    mode=dropbox.files.WriteMode('overwrite')
+                )
+
+                self.last_upload_time = time.time()
+                logger.info("Upload successful")
+                return True
+
+            except dropbox.exceptions.AuthError:
+                logger.info("Authentication error during upload, attempting to refresh token...")
+                if self.refresh_dropbox_connection():
+                    # Retry after refresh
+                    self.dbx.files_upload(
+                        file_data,
+                        remote_path,
+                        mode=dropbox.files.WriteMode('overwrite')
+                    )
+
+                    self.last_upload_time = time.time()
+                    logger.info("Upload successful after token refresh")
+                    return True
+                else:
+                    logger.error("Failed to refresh token for upload")
+                    return False
+
         except Exception as e:
             logger.error(f"Upload failed: {e}")
             return False
@@ -748,15 +1053,32 @@ if __name__ == "__main__":
     
     def create_config_file(self, install_dir):
         """Create configuration file"""
-        
+
+        # Load OAuth tokens from temp config
+        oauth_tokens = {}
+        temp_config_path = Path("temp_oauth_config.json")
+        if temp_config_path.exists():
+            try:
+                with open(temp_config_path, 'r', encoding='utf-8') as f:
+                    oauth_tokens = json.load(f)
+                # Clean up temp file
+                temp_config_path.unlink()
+            except Exception as e:
+                logger.warning(f"Failed to load OAuth tokens: {e}")
+
         config = {
             "app_name": self.app_name.get(),
             "save_file_path": str(self.save_file_path.get()),
-            "dropbox_token": self.dropbox_token.get(),
+            "dropbox_app_key": self.dropbox_app_key.get(),
+            "dropbox_app_secret": self.dropbox_app_secret.get(),
+            "dropbox_access_token": oauth_tokens.get("dropbox_access_token", ""),
+            "dropbox_refresh_token": oauth_tokens.get("dropbox_refresh_token", ""),
+            "dropbox_token_expires_in": oauth_tokens.get("dropbox_token_expires_in", 0),
+            "dropbox_token_obtained_at": oauth_tokens.get("dropbox_token_obtained_at", 0),
             "dropbox_folder": "/SyncedFiles",
             "sync_filename": Path(self.save_file_path.get()).name
         }
-        
+
         config_path = install_dir / "config.json"
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
@@ -930,9 +1252,9 @@ WshShell.Run "pythonw maa_sync.py", 0, False
     
     def test_installation(self, install_dir):
         """Test the installation"""
-        
+
         # Check if files exist
-        required_files = ["maa_sync.py", "config.json"]
+        required_files = ["maa_sync.py", "config.json", "dropbox_oauth.py"]
         for file_name in required_files:
             file_path = install_dir / file_name
             if not file_path.exists():
