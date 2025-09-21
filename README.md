@@ -5,9 +5,23 @@ A cross-platform GUI installer that sets up automatic save file synchronization 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![OAuth](https://img.shields.io/badge/OAuth-2.0-green.svg)
+
+## 🆕 **OAuth 2.0 Upgrade**
+
+**New in this version**: Upgraded from manual access tokens to secure OAuth 2.0 with refresh tokens!
+
+✅ **What's Better:**
+- **No more token copying** - Browser-based authorization
+- **Automatic token refresh** - Never expires, no manual updates needed
+- **Enhanced security** - Industry-standard OAuth 2.0 protocol
+- **Better user experience** - Click "Authorize" and you're done!
+
+✅ **Backward Compatible**: Existing installations continue working
 
 ## 🚀 Features
 
+- **OAuth 2.0 Security** - Secure refresh tokens with automatic renewal
 - **One-Click Installation** - Simple GUI installer handles everything automatically
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 - **Auto-Detection** - Automatically finds MAA Redux save files
@@ -16,6 +30,7 @@ A cross-platform GUI installer that sets up automatic save file synchronization 
 - **Background Operation** - Runs silently in the background
 - **Easy Management** - Helper scripts for manual control
 - **Conflict-Free** - Intelligent sync timing prevents save corruption
+- **Token-Free** - No manual token copying, browser-based authorization
 
 ## 📋 Requirements
 
@@ -38,12 +53,14 @@ python maa_redux_installer.py
 ```
 
 ### Step 3: Follow the GUI Setup
-1. **Get Dropbox Token** - Click "Get Token" for setup instructions
-2. **Select Save File** - Use "Auto-Detect" or "Browse" manually
-3. **Choose Install Location** - Default location works for most users
-4. **Install & Setup** - Click to complete installation
+1. **Setup Dropbox App** - Click "Setup Dropbox App" for detailed instructions
+2. **Enter App Credentials** - Copy App Key and App Secret from your Dropbox app
+3. **Authorize with Dropbox** - Browser-based OAuth authorization (no token copying!)
+4. **Select Save File** - Use "Auto-Detect" or "Browse" manually
+5. **Choose Install Location** - Default location works for most users
+6. **Install & Setup** - Click to complete installation
 
-## 🔑 Dropbox Setup
+## 🔑 Dropbox OAuth Setup
 
 ### Creating Your Dropbox App
 1. Visit [Dropbox Developers](https://www.dropbox.com/developers/apps)
@@ -62,13 +79,22 @@ Navigate to the **Permissions** tab and enable:
 
 Click **"Submit"** to save permissions.
 
-### Generate Access Token
+### Configure OAuth Settings
 1. Go to **Settings** tab
-2. In **OAuth 2** section, click **"Generate"** for access token
-3. Copy the generated token
-4. Paste it into the installer
+2. Copy **"App key"** and **"App secret"** to the installer
+3. In **"OAuth 2"** section, add these **Redirect URIs**:
+   - `http://localhost:8080/oauth/callback`
+   - `http://127.0.0.1:8080/oauth/callback`
+4. Click **"Add"** for both URIs
+5. Click **"Authorize with Dropbox"** in the installer
 
-> ⚠️ **Security Note**: Keep your token private and never share it publicly!
+### Browser Authorization
+- Your browser will open automatically
+- Log in to Dropbox and click **"Allow"**
+- The browser tab will close automatically
+- Return to the installer - you're now authorized!
+
+> 🔒 **Security**: Uses OAuth 2.0 with refresh tokens - more secure than access tokens!
 
 ## 🎮 How It Works
 
@@ -91,6 +117,7 @@ After installation, you'll find:
 ```
 MAA-Redux-Sync/
 ├── maa_sync.py              # Main sync script
+├── dropbox_oauth.py         # OAuth 2.0 helper module
 ├── config.json              # Configuration file
 ├── sync.log                 # Activity logs
 ├── backups/                 # Local save backups
@@ -139,11 +166,16 @@ Edit `config.json` to customize:
 {
     "app_name": "MAA Redux",
     "save_file_path": "/path/to/your/save.dat",
-    "dropbox_token": "your_token_here",
+    "dropbox_app_key": "your_app_key_here",
+    "dropbox_app_secret": "your_app_secret_here",
+    "dropbox_access_token": "auto_managed_by_oauth",
+    "dropbox_refresh_token": "auto_managed_by_oauth",
     "dropbox_folder": "/SyncedFiles",
     "sync_filename": "save.dat"
 }
 ```
+
+> 📝 **Note**: OAuth tokens are automatically managed - no manual editing needed!
 
 ## 🚨 Troubleshooting
 
@@ -155,9 +187,10 @@ Edit `config.json` to customize:
 - Test connection with `python maa_sync.py --test`
 
 **Dropbox connection failed?**
-- Verify your token is correct and hasn't expired
+- Re-authorize using "Authorize with Dropbox" button
 - Check internet connection
 - Ensure Dropbox app permissions are properly set
+- Verify redirect URIs are configured correctly
 
 **Game not detected?**
 - Update `app_name` in `config.json` if MAA Redux executable name is different
@@ -184,11 +217,14 @@ cp "backups/backup_YYYYMMDD_HHMMSS_save.dat" "/path/to/game/save.dat"
 
 ## 🔒 Security & Privacy
 
+- **OAuth 2.0 Security**: Industry-standard authentication with refresh tokens
+- **Automatic Token Refresh**: Tokens renew automatically without user intervention
 - **Local Processing**: All sync logic runs locally on your machine
 - **App Folder Access**: Dropbox app only accesses its own folder
 - **Encrypted Transfer**: All data transfers use Dropbox's encryption
 - **No External Dependencies**: No third-party services besides Dropbox
 - **Open Source**: Full source code available for review
+- **Revokable Access**: Users can revoke authorization anytime from Dropbox settings
 
 ## 🤝 Contributing
 
