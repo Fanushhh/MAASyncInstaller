@@ -28,7 +28,7 @@ A cross-platform GUI installer that sets up automatic save file synchronization 
 
 ### Step 1: Download
 ```bash
-git clone https://github.com/yourusername/MAASyncInstaller.git
+git clone https://github.com/Fanushhh/MAASyncInstaller.git
 cd MAASyncInstaller
 ```
 
